@@ -1,20 +1,32 @@
-import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View } from 'react-native';
+import React from "react";
+import { NavigationContainer } from "@react-navigation/native";
+import { createStackNavigator } from "@react-navigation/stack";
+import MainScreen from "./screens/main-screen";
+import TestScreen from "./screens/test/test-screen";
+import EmergencyRoomScreen from "./screens/emergency-room/emergency-room-screen";
+import FirstAidScreen from "./screens/first-aid/first-aid-screen";
+import BookmarkScreen from "./screens/bookmark/bookmark-screen";
+import EmergencyConditionSearchScreen from "./screens/emergency-condition-search/emergency-condition-search-screen";
+
+const Stack = createStackNavigator();
 
 export default function App() {
   return (
-    <View style={styles.container}>
-      <Text>Open up App.tsx to start working on your app!</Text>
-      <StatusBar style="auto" />
-    </View>
+    <NavigationContainer>
+      <Stack.Navigator screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="Main" component={MainScreen} />
+        <Stack.Screen name="TestScreen" component={TestScreen} />
+        <Stack.Screen
+          name="EmergencyRoomScreen"
+          component={EmergencyRoomScreen}
+        />
+        <Stack.Screen name="FirstAidScreen" component={FirstAidScreen} />
+        <Stack.Screen name="BookmarkScreen" component={BookmarkScreen} />
+        <Stack.Screen
+          name="EmergencyConditionSearchScreen"
+          component={EmergencyConditionSearchScreen}
+        />
+      </Stack.Navigator>
+    </NavigationContainer>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-});
