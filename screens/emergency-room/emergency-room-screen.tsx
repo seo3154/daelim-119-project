@@ -10,6 +10,8 @@ import {
 import styled from "styled-components/native";
 import MapView, { Marker } from "react-native-maps";
 import * as Location from "expo-location";
+import axios from "axios";
+import EmergencyRoomData from "./emergency-room-data";
 
 const EmergencyRoomScreen = () => {
   const SafeContainer = styled(SafeAreaView)`
@@ -93,10 +95,10 @@ const EmergencyRoomScreen = () => {
 
   const [location, setLocation] =
     useState<Location.LocationObjectCoords | null>(null);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState<string>("");
-  const [showButtons, setShowButtons] = useState<boolean>(true);
   const [address, setAddress] = useState<string | null>(null);
+  const [emergencyRooms, setEmergencyRooms] = useState<EmergencyRoomData[]>([]);
+  const [nearestRooms, setNearestRooms] = useState<EmergencyRoomData[]>([]);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const [mapRegion, setMapRegion] = useState({
     latitude: 37.5665,
@@ -107,7 +109,7 @@ const EmergencyRoomScreen = () => {
 
   const navigation = useNavigation();
 
-  // 위치 권한 요청 및 초기 위치 설정
+  // 현재 위치 권한 요청 및 설정
   const locationPermissions = async () => {
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
@@ -116,91 +118,76 @@ const EmergencyRoomScreen = () => {
         return;
       }
       const userLocation = await Location.getCurrentPositionAsync({});
-      if (
-        userLocation.coords.latitude !== location?.latitude ||
-        userLocation.coords.longitude !== location?.longitude
-      ) {
-        setLocation(userLocation.coords);
-        setMapRegion({
-          latitude: userLocation.coords.latitude,
-          longitude: userLocation.coords.longitude,
-          latitudeDelta: 0.01,
-          longitudeDelta: 0.01,
-        });
-        fetchAddressFromCoords(
-          userLocation.coords.latitude,
-          userLocation.coords.longitude
-        );
-      }
+      setLocation(userLocation.coords);
+      setMapRegion({
+        latitude: userLocation.coords.latitude,
+        longitude: userLocation.coords.longitude,
+        latitudeDelta: 0.01,
+        longitudeDelta: 0.01,
+      });
+      fetchEmergencyRoomData(
+        userLocation.coords.latitude,
+        userLocation.coords.longitude
+      );
     } catch (error) {
-      setErrorMsg("Failed to get current location.");
+      setErrorMsg("현재 위치를 가져오는 데 실패했습니다.");
     }
   };
 
-  // 위도, 경도로부터 주소 정보 가져오기
-  const fetchAddressFromCoords = async (
+  // 주변 병원 데이터를 가져오는 함수
+  const fetchEmergencyRoomData = async (
     latitude: number,
     longitude: number
   ) => {
     try {
-      const [result] = await Location.reverseGeocodeAsync({
-        latitude,
-        longitude,
+      const response = await axios.get<EmergencyRoomData[]>(
+        "https://hospital-main-api.minq.work/swagger-ui/index.html"
+      );
+      const data = response.data;
+      const filteredRooms = data.filter((room) => {
+        const distance = calculateDistance(
+          latitude,
+          longitude,
+          room.latitude,
+          room.longitude
+        );
+        return distance <= 5; // 반경 5km 내의 병원만 필터링
       });
-      if (result) {
-        // 필요한 필드 추출
-        const { region, city, district, street, name } = result;
-
-        // 한글로 주소 문자열 구성
-        const fullAddress = [
-          region || "", // 시도
-          city || "", // 시군구
-          district || "", // 읍면동
-          street || "", // 상세주소
-          name || "", // 기타 이름
-        ]
-          .filter(Boolean)
-          .join(" "); // 비어있지 않은 값만 포함하여 조합
-
-        setAddress(fullAddress);
-      } else {
-        setAddress("주소를 찾을 수 없습니다.");
-      }
+      setEmergencyRooms(filteredRooms);
+      setNearestRooms(filteredRooms);
     } catch (error) {
-      setErrorMsg("역 지오코딩 중 오류가 발생했습니다.");
+      console.error("병원 데이터를 가져오는 중 오류 발생:", error);
     }
+  };
+
+  // 두 지점 간의 거리 계산 (위도/경도를 이용한 Haversine 공식을 사용)
+  const calculateDistance = (
+    lat1: number,
+    lon1: number,
+    lat2: number,
+    lon2: number
+  ) => {
+    const R = 6371; // 지구 반지름 (km)
+    const dLat = (lat2 - lat1) * (Math.PI / 180);
+    const dLon = (lon2 - lon1) * (Math.PI / 180);
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(lat1 * (Math.PI / 180)) *
+        Math.cos(lat2 * (Math.PI / 180)) *
+        Math.sin(dLon / 2) *
+        Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c; // 거리 반환 (km)
   };
 
   useEffect(() => {
     locationPermissions();
   }, []);
 
-  // 검색 함수 (메모이제이션 처리)
-  const handleSearch = useCallback(async () => {
-    try {
-      const results = await Location.geocodeAsync(searchQuery);
-      if (results.length > 0) {
-        const { latitude, longitude } = results[0];
-        setMapRegion({
-          latitude,
-          longitude,
-          latitudeDelta: 0.01,
-          longitudeDelta: 0.01,
-        });
-        fetchAddressFromCoords(latitude, longitude);
-        setSearchQuery("");
-      } else {
-        Alert.alert("위치를 찾을 수 없습니다.");
-      }
-    } catch (error) {
-      setErrorMsg("위치 검색 중 오류가 발생했습니다.");
-    }
-  }, [searchQuery]);
-
   return (
     <SafeContainer>
       <Header>
-        <HeaderText>Test 병원</HeaderText>
+        <HeaderText>응급실 위치</HeaderText>
       </Header>
       <MapContainer>
         <MapV region={mapRegion} showsUserLocation={true}>
@@ -213,22 +200,42 @@ const EmergencyRoomScreen = () => {
               title="현재 위치"
             />
           )}
+          {nearestRooms.map((room) => (
+            <Marker
+              key={room.id}
+              coordinate={{
+                latitude: room.latitude,
+                longitude: room.longitude,
+              }}
+              title={room.name}
+            />
+          ))}
         </MapV>
       </MapContainer>
 
       <EmergencyContainer>
-        <EmergencyData>응급실 정보 출력 Test</EmergencyData>
+        {nearestRooms.length > 0 ? (
+          nearestRooms.map((room) => (
+            <View key={room.id}>
+              <EmergencyData>{room.name}</EmergencyData>
+              <Text>{room.location}</Text>
+              <Text>Available Beds: {room.availableBeds}</Text>
+            </View>
+          ))
+        ) : (
+          <EmergencyData>근처 병원이 없습니다.</EmergencyData>
+        )}
       </EmergencyContainer>
 
-      <ButtonContainer show={showButtons}>
+      <ButtonContainer show={true}>
         {[
-          { title: "공유", screen: "EmergencyRoomScreen" },
-          { title: "전화", screen: "FirstAidScreen" },
-          { title: "길찾기", screen: "BookmarkScreen" },
+          { title: "공유", screen: "ShareScreen" },
+          { title: "전화", screen: "CallScreen" },
+          { title: "길찾기", screen: "DirectionsScreen" },
         ].map((button) => (
           <ActionButton
             key={button.screen}
-            onPress={() => navigation.navigate(button.screen)} // Add this line
+            onPress={() => navigation.navigate(button.screen)}
           >
             <ActionButtonText>{button.title}</ActionButtonText>
           </ActionButton>

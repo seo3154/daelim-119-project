@@ -3,24 +3,19 @@ import { useEffect, useState } from "react";
 import { SafeAreaView, Text, View } from "react-native";
 import MapView, { Marker } from "react-native-maps";
 import * as Location from "expo-location";
-import styled from "styled-components";
+import styled from "styled-components/native"; // styled-components 수정
+import BottomSheet from "../bottom-sheet/bottom-sheet";
 
 const EmergencyConditionSearchScreen = () => {
   const [location, setLocation] =
     useState<Location.LocationObjectCoords | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState<string>("");
-  const [showButtons, setShowButtons] = useState<boolean>(true);
-  const [address, setAddress] = useState<string | null>(null);
-
   const [mapRegion, setMapRegion] = useState({
     latitude: 37.5665,
     longitude: 126.978,
     latitudeDelta: 0.01,
     longitudeDelta: 0.01,
   });
-
-  const navigation = useNavigation();
 
   const SafeContainer = styled(SafeAreaView)`
     flex: 1;
@@ -58,58 +53,16 @@ const EmergencyConditionSearchScreen = () => {
         return;
       }
       const userLocation = await Location.getCurrentPositionAsync({});
-      if (
-        userLocation.coords.latitude !== location?.latitude ||
-        userLocation.coords.longitude !== location?.longitude
-      ) {
-        setLocation(userLocation.coords);
-        setMapRegion({
-          latitude: userLocation.coords.latitude,
-          longitude: userLocation.coords.longitude,
-          latitudeDelta: 0.01,
-          longitudeDelta: 0.01,
-        });
-        fetchAddressFromCoords(
-          userLocation.coords.latitude,
-          userLocation.coords.longitude
-        );
-      }
-    } catch (error) {
-      setErrorMsg("Failed to get current location.");
-    }
-  };
-
-  // 위도, 경도로부터 주소 정보 가져오기
-  const fetchAddressFromCoords = async (
-    latitude: number,
-    longitude: number
-  ) => {
-    try {
-      const [result] = await Location.reverseGeocodeAsync({
-        latitude,
-        longitude,
+      setLocation(userLocation.coords);
+      setMapRegion({
+        latitude: userLocation.coords.latitude,
+        longitude: userLocation.coords.longitude,
+        latitudeDelta: 0.01,
+        longitudeDelta: 0.01,
       });
-      if (result) {
-        // 필요한 필드 추출
-        const { region, city, district, street, name } = result;
-
-        // 한글로 주소 문자열 구성
-        const fullAddress = [
-          region || "", // 시도
-          city || "", // 시군구
-          district || "", // 읍면동
-          street || "", // 상세주소
-          name || "", // 기타 이름
-        ]
-          .filter(Boolean)
-          .join(" "); // 비어있지 않은 값만 포함하여 조합
-
-        setAddress(fullAddress);
-      } else {
-        setAddress("주소를 찾을 수 없습니다.");
-      }
     } catch (error) {
-      setErrorMsg("역 지오코딩 중 오류가 발생했습니다.");
+      setErrorMsg("현재 위치를 가져오는 데 실패했습니다.");
+      console.error(error); // 에러 콘솔 출력
     }
   };
 
@@ -133,6 +86,8 @@ const EmergencyConditionSearchScreen = () => {
           />
         )}
       </MapV>
+      {errorMsg && <Text style={{ color: "red" }}>{errorMsg}</Text>}
+      <BottomSheet />
     </SafeContainer>
   );
 };
